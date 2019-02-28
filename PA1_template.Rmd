@@ -1,25 +1,108 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
+title: "Reproducible Research Week 2 Project"
+output: html_document
 ---
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
 
 ## Loading and preprocessing the data
 
+Loading the activity.csv data into R in the correct format and loading any libraries needed to run the analysis below
+
+```{r}
+library(chron)
+library(plyr)
+library(lattice)
+
+activitydata <- read.csv("activity.csv", header = TRUE, na.strings = "NA", stringsAsFactors = FALSE) # import data
+activitydata$date <- as.Date(activitydata$date, format = "%Y-%m-%d") # convert date column to correct format
+activitydata$day <- weekdays(activitydata$date) # pull out the days of the week
+weekendactivity <- activitydata[grepl("Saturday|Sunday", activitydata$day),] # subset a weekend dataframe
+weekendactivity$wkday <- "Weekend" # tag the weekend dataframe
+weekdayactivity <- activitydata[!grepl("Saturday|Sunday", activitydata$day),] # subset the weekday dataframe
+weekdayactivity$wkday <- "Weekday" # tag the weekday dataframe
+taggedactivitydata <- rbind(weekdayactivity,weekendactivity) # recombine the data
+taggedactivitydata <- taggedactivitydata[order(taggedactivitydata$date),] # return to date order
 
 
-## What is mean total number of steps taken per day?
+```
+
+
+## Investigating the mean number of steps taken in a day
+
+Calculating the total number of steps taken per day, exploring this data using a histogram and calculating the mean and median total number per day.
+
+```{r}
+stepsbydate <- with(taggedactivitydata, tapply(steps, date, sum, na.rm=TRUE)) # Calculate total steps per day
+hist(stepsbydate, main = "Histogram of steps taken per day", xlab = "Number of steps in a day", col = "lightblue", las=1, breaks = 10, ylim = c(0,20), xlim = c(0,25000)) # Plot histogram of daily steps
+meansteps <- mean(stepsbydate) # calculate mean daily steps
+mediansteps <- median(stepsbydate) # calculate median daily steps
+```
+
+The mean number of steps per day is `r meansteps` and the median is `r mediansteps`.
+
+
+## Investigating the average daily activity pattern
+
+Calculate the average number of steps taken per 5 minute interval. Investigate in a time series plot. Identify the interval with the most steps on average per day.
+
+```{r}
+dailyactivity <- with(taggedactivitydata, tapply(steps, interval, mean, na.rm=TRUE)) # Calculate mean steps per interval of the day
+plot(x = taggedactivitydata$interval[1:288], y= dailyactivity, type = "l", xlab = "Five minute interval", ylab= "Average number of steps per day", main = "Daily steps activity by 5 minute interval", col = "blue") # Plot a line chart of the steps per interval on an average day
+mostactiveinterval <- taggedactivitydata$interval[which.max(dailyactivity)] # identify the most active interval
+```
+
+Most activity is seen on average during the time interval `r mostactiveinterval`.
+
+
+## Imputing missing values and reassessing the data
+
+Interrogate the data for the number of missing values in the number of steps. Devise a strategy for filling those missing values. Create a new, complete, dataset. Re-evaluate the frequency histogram and mean and median steps per day.
+
+```{r}
+NumNA <- count(is.na(taggedactivitydata$steps)) # calculate the number of NAs in steps data
+print(NumNA) # print the answer
+```
+The number of missing steps values is equal to the number of TRUE in the table above.
+
+```{r}
+## impute the missing values using the average value for that interval
+dailyactivitylong <- rep.int(dailyactivity, 61) # extend daily activity vector to nrows of dataframe
+taggedactivitydata$dailyactivity <- dailyactivitylong # append daily activity vector
+
+for (i in 1:nrow(taggedactivitydata)){ # make new column of either average interval value (if NA) or existing steps value if not missing
+    if(is.na(taggedactivitydata$steps[i])){
+        taggedactivitydata$impmean[i] <- taggedactivitydata$dailyactivity[i]
+    }else{
+        taggedactivitydata$impmean[i] <- taggedactivitydata$steps[i]
+    }
+}
+
+impstepsbydate <- with(taggedactivitydata, tapply(impmean, date, sum, na.rm=TRUE)) # re-calculate steps per day
+ hist(impstepsbydate, main = "Histogram of imputed steps taken per day", xlab = "Number of steps in a day", col = "lightblue", las=1, breaks = 10, ylim = c(0,30), xlim = c(0,25000)) # plot as histogram
+ 
+ meanimpsteps <- mean(impstepsbydate) # calculate mean
+ medianimpsteps <- median(impstepsbydate) # calculate median
+ 
+```
+
+With the imputed data added, the mean number of steps per day has increased from `r meansteps` to `r meanimpsteps` and the median from `r mediansteps` to `r medianimpsteps`. Interestingly, the mean and the median are now identical.
+
+
+## Are there differences in activity levels between weekdays and weekends?
+
+The README requests the use of the imputed data on a new factor that gives whether the day in question is a weekday or a weekend day.
+
+
+```{r}
+taggedactivitydata$wkday <- as.factor(taggedactivitydata$wkday) # make wkday column a factor
+
+summarydata <- aggregate(impmean ~ interval + wkday, taggedactivitydata, mean) # summarise data by interval and weekday/weekend
+
+xyplot(impmean ~ interval | wkday, summarydata, type = "l", layout = c(1,2), xlab = "Interval", ylab = "Number of steps", main = "Activity split by weekend or weekday") # plot the data on a lattice plot
+```
 
 
 
-## What is the average daily activity pattern?
-
-
-
-## Imputing missing values
-
-
-
-## Are there differences in activity patterns between weekdays and weekends?
